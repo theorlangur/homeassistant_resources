@@ -48,7 +48,7 @@ action:
               sequence:
                 - service: mqtt.publish
                   data:
-                    qos: "2"
+                    qos: "0"
                     retain: false
                     topic: "{{'zigbee2mqtt/'~device_attr(repeat.item, 'name')~'/set'}}"
                     payload: '{{''{"command":{"cluster":"genLevelCtrl","command":"moveWithOnOff","payload":{"movemode":1,"rate":''~(light_rate | string)~''}}}''}}'
@@ -61,7 +61,7 @@ action:
               sequence:
                 - service: mqtt.publish
                   data:
-                    qos: "2"
+                    qos: "0"
                     retain: false
                     topic: "{{'zigbee2mqtt/'~device_attr(repeat.item, 'name')~'/set'}}"
                     payload: '{{''{"command":{"cluster":"genLevelCtrl","command":"moveWithOnOff","payload":{"movemode":0,"rate":''~(light_rate | string)~''}}}''}}'
@@ -74,10 +74,16 @@ action:
               sequence:
                 - service: mqtt.publish
                   data:
-                    qos: "2"
+                    qos: "0"
                     retain: false
                     topic: "{{'zigbee2mqtt/'~device_attr(repeat.item, 'name')~'/set'}}"
                     payload: '{{''{"command":{"cluster":"genLevelCtrl","command":"stop","payload":{}}}''}}'
+                - service: mqtt.publish
+                  data:
+                    qos: "0"
+                    retain: false
+                    topic: "{{'zigbee2mqtt/'~device_attr(repeat.item, 'name')~'/set/read'}}"
+                    payload: '{"cluster":"genLevelCtrl","attributes":["currentLevel"]}'
       - conditions:
           - condition: trigger
             id: dim-on
