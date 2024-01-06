@@ -1,0 +1,127 @@
+blueprint:
+  name: ZHA IKEA e1743 On-Off Dimmer to control ZHA Zigbee Group
+  description: Control a ZHA zigbee group with an IKEA Tradfri dimmer
+  domain: automation
+  input:
+    switch_device:
+      name: TRADFRI On/Off switch
+      selector:
+        device:
+          filter:
+            integration: zha
+            model: "TRADFRI on/off switch"
+    light_target:
+      name: Zigbee Group Id
+      selector:
+        number:
+          min: 1
+          max: 255
+    dim_rate:
+      name: Dimming Rate
+      description: Transition time for dimming
+      default: 60
+      selector:
+        number:
+          min: 1
+          max: 255
+
+variables:
+  light_rate: !input dim_rate
+mode: single
+max_exceeded: silent
+trigger:
+  - device_id: !input switch_device
+    domain: zha
+    platform: device
+    type: remote_button_long_press
+    subtype: dim_down
+    id: dim-down
+  - device_id: !input switch_device
+    domain: zha
+    platform: device
+    type: remote_button_long_press
+    subtype: dim_up
+    id: dim-up
+  - device_id: !input switch_device
+    domain: zha
+    platform: device
+    type: remote_button_long_release
+    subtype: dim_up
+    id: dim-up-release
+  - device_id: !input switch_device
+    domain: zha
+    platform: device
+    type: remote_button_long_release
+    subtype: dim_down
+    id: dim-down-release
+  - device_id: !input switch_device
+    domain: zha
+    platform: device
+    type: remote_button_short_press
+    subtype: turn_on
+    id: dim-on
+  - device_id: !input switch_device
+    domain: zha
+    platform: device
+    type: remote_button_short_press
+    subtype: turn_off
+    id: dim-off
+condition: []
+action:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: dim-down
+        sequence:
+          - service: zha.issue_zigbee_group_command
+            data:
+              group: !input light_target
+              cluster_id: 8 #LevelControl
+              command: 5 #move_with_on_off
+              args:
+                - 1 #down
+                - "{{light_rate}}"
+      - conditions:
+          - condition: trigger
+            id: dim-up
+        sequence:
+          - service: zha.issue_zigbee_group_command
+            data:
+              group: !input light_target
+              cluster_id: 8 #LevelControl
+              command: 5 #move_with_on_off
+              args:
+                - 0 #up
+                - "{{light_rate}}"
+      - conditions:
+          - condition: trigger
+            id:
+              - dim-up-release
+              - dim-down-release
+        sequence:
+          - service: zha.issue_zigbee_group_command
+            data:
+              group: !input light_target
+              cluster_id: 8 #LevelControl
+              command: 3 #stop
+              args: []
+      - conditions:
+          - condition: trigger
+            id: dim-on
+        sequence:
+          - service: zha.issue_zigbee_group_command
+            data:
+              group: !input light_target
+              cluster_id: 6 #OnOff
+              command: 1 #on
+              args: []
+      - conditions:
+          - condition: trigger
+            id: dim-off
+        sequence:
+          - service: zha.issue_zigbee_group_command
+            data:
+              group: !input light_target
+              cluster_id: 6 #OnOff
+              command: 0 #off
+              args: []

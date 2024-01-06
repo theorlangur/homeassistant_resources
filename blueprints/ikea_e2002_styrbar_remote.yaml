@@ -1,0 +1,171 @@
+blueprint:
+  name: IKEA e2002 STYRBAR Remote to control lights + color temp
+  description: Control lights and color temp
+  domain: automation
+  input:
+    switch_device:
+      name: 4-way Dimmer Switch (STYRBAR)
+      selector:
+        device:
+    light_target:
+      name: Light
+      selector:
+        target:
+          entity:
+            domain: light
+    dim_delay:
+      name: Dimming Delay Time
+      description: Time between dimming lights
+      default: 400
+      selector:
+        number:
+          min: 50
+          max: 2000
+          unit_of_measurement: milliseconds
+    dim_iteration_wait:
+      name: Dimming Delay Time between iterations
+      description: Time between dimming lights
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 1000
+          unit_of_measurement: milliseconds
+    dim_step_up_pct:
+      name: Dimming Step Up Percentage
+      description: Step to dim in percents
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 100
+          unit_of_measurement: percentage
+    dim_step_down_pct:
+      name: Dimming Step Down Percentage
+      description: Step to dim in percents
+      default: -10
+      selector:
+        number:
+          min: -100
+          max: -1
+          unit_of_measurement: percentage
+variables:
+  thelight: !input light_target
+  light_transition: !input dim_delay
+mode: restart
+trigger:
+  - device_id: !input switch_device
+    domain: zha
+    platform: device
+    type: remote_button_short_press
+    subtype: turn_on
+    id: dim-on
+  - device_id: !input switch_device
+    domain: zha
+    platform: device
+    type: remote_button_short_press
+    subtype: turn_off
+    id: dim-off
+  - device_id: !input switch_device
+    domain: zha
+    platform: device
+    type: remote_button_long_press
+    subtype: dim_up
+    id: dim-up
+  - device_id: !input switch_device
+    domain: zha
+    platform: device
+    type: remote_button_long_release
+    subtype: dim_up
+    id: dim-up-release
+  - device_id: !input switch_device
+    domain: zha
+    platform: device
+    type: remote_button_long_press
+    subtype: dim_down
+    id: dim-down
+  - device_id: !input switch_device
+    domain: zha
+    platform: device
+    type: remote_button_long_release
+    subtype: dim_down
+    id: dim-down-released
+  - device_id: !input switch_device
+    domain: zha
+    platform: device
+    type: remote_button_short_press
+    subtype: right
+    id: right-click
+  - device_id: !input switch_device
+    domain: zha
+    platform: device
+    type: remote_button_short_press
+    subtype: left
+    id: left-click
+condition: []
+action:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: dim-on
+        sequence:
+          - service: light.turn_on
+            data: {}
+            target: !input light_target
+      - conditions:
+          - condition: trigger
+            id: dim-off
+        sequence:
+          - service: light.turn_off
+            data: {}
+            target: !input light_target
+      - conditions:
+          - condition: trigger
+            id: dim-up
+        sequence:
+          - repeat:
+              while:
+                - condition: trigger
+                  id: dim-up
+              sequence:
+                - service: light.turn_on
+                  data:
+                    brightness_step_pct: !input dim_step_up_pct
+                    transition: "{{ light_transition / 1000 }}"
+                  target: !input light_target
+                - delay:
+                    milliseconds: !input dim_iteration_wait
+      - conditions:
+          - condition: trigger
+            id: dim-down
+        sequence:
+          - repeat:
+              while:
+                - condition: trigger
+                  id: dim-down
+              sequence:
+                - service: light.turn_on
+                  data:
+                    brightness_step_pct: !input dim_step_down_pct
+                    transition: "{{ light_transition / 1000 }}"
+                  target: !input light_target
+                - delay:
+                    milliseconds: !input dim_iteration_wait
+      - conditions:
+          - condition: trigger
+            id: right-click
+        sequence:
+          - service: light.turn_on
+            data:
+              color_temp: '{{ state_attr(thelight.entity_id,"color_temp")|int(200) + 50 }}'
+              #transition: 0.25
+            target: !input light_target
+      - conditions:
+          - condition: trigger
+            id: left-click
+        sequence:
+          - service: light.turn_on
+            data:
+              color_temp: '{{ [state_attr(thelight.entity_id,"color_temp")|int(200) - 50, 1]|max }}'
+              #transition: 0.25
+            target: !input light_target

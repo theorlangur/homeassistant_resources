@@ -1,0 +1,136 @@
+blueprint:
+  name: ZHA IKEA e1743 On-Off Dimmer to control ZHA lights
+  description: Control a ZHA lights with an IKEA Tradfri dimmer
+  domain: automation
+  input:
+    switch_device:
+      name: TRADFRI On/Off switch
+      selector:
+        device:
+          filter:
+            integration: zha
+            model: "TRADFRI on/off switch"
+    light_target:
+      name: Lights
+      selector:
+        target:
+          entity:
+            integration: zha
+            domain: light
+    dim_rate:
+      name: Dimming Rate
+      description: Transition time for dimming
+      default: 60
+      selector:
+        number:
+          min: 1
+          max: 255
+
+variables:
+  light_rate: !input dim_rate
+  lights: !input light_target
+mode: single
+max_exceeded: silent
+trigger:
+  - device_id: !input switch_device
+    domain: zha
+    platform: device
+    type: remote_button_long_press
+    subtype: dim_down
+    id: dim-down
+  - device_id: !input switch_device
+    domain: zha
+    platform: device
+    type: remote_button_long_press
+    subtype: dim_up
+    id: dim-up
+  - device_id: !input switch_device
+    domain: zha
+    platform: device
+    type: remote_button_long_release
+    subtype: dim_up
+    id: dim-up-release
+  - device_id: !input switch_device
+    domain: zha
+    platform: device
+    type: remote_button_long_release
+    subtype: dim_down
+    id: dim-down-release
+  - device_id: !input switch_device
+    domain: zha
+    platform: device
+    type: remote_button_short_press
+    subtype: turn_on
+    id: dim-on
+  - device_id: !input switch_device
+    domain: zha
+    platform: device
+    type: remote_button_short_press
+    subtype: turn_off
+    id: dim-off
+condition: []
+action:
+  - variables:
+      light_list: >
+        {% if lights.entity_id is string %}
+        {{   [lights.entity_id] }}
+        {% else %}
+        {{   lights.entity_id }}
+        {% endif %}
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: dim-down
+        sequence:
+          - repeat:
+              for_each: "{{ light_list }}"
+              sequence:
+                - service: zha_toolkit.zcl_cmd
+                  data:
+                    ieee: "{{ repeat.item }}"
+                    cluster: 8 #LevelControl
+                    cmd: 5 #move_with_on_off
+                    args:
+                      - 1 #down
+                      - "{{light_rate}}"
+      - conditions:
+          - condition: trigger
+            id: dim-up
+        sequence:
+          - repeat:
+              for_each: "{{ light_list }}"
+              sequence:
+                - service: zha_toolkit.zcl_cmd
+                  data:
+                    ieee: "{{ repeat.item }}"
+                    cluster: 8 #LevelControl
+                    cmd: 5 #move_with_on_off
+                    args:
+                      - 0 #up
+                      - "{{light_rate}}"
+      - conditions:
+          - condition: trigger
+            id:
+              - dim-up-release
+              - dim-down-release
+        sequence:
+          - repeat:
+              for_each: "{{ light_list }}"
+              sequence:
+                - service: zha_toolkit.zcl_cmd
+                  data:
+                    ieee: "{{ repeat.item }}"
+                    cluster: 8 #LevelControl
+                    cmd: 3 #stop
+      - conditions:
+          - condition: trigger
+            id: dim-on
+        sequence:
+          - service: light.turn_on
+            target: !input light_target
+      - conditions:
+          - condition: trigger
+            id: dim-off
+        sequence:
+          - service: light.turn_off
+            target: !input light_target

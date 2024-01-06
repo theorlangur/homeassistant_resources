@@ -1,0 +1,98 @@
+blueprint:
+  name: Z2M Color Temperature cluster Color MoveColorTemp
+  description: Control Z2M Color Temperature with any controller
+  domain: automation
+  input:
+    device_triggers:
+      name: Triggers for light control
+      description: "IDs:color-up,color-down,color-release,color-step-up,color-step-down"
+      selector:
+        trigger:
+    light_target:
+      name: Lights
+      selector:
+        target:
+          entity:
+            integration: mqtt
+            domain: light
+    color_temp_rate:
+      name: Color temperature change rate
+      description: Speed of changing temperature color
+      default: 60
+      selector:
+        number:
+          min: 1
+          max: 255
+variables:
+  rate: !input color_temp_rate
+  lights: !input light_target
+mode: single
+max_exceeded: silent
+trigger: !input device_triggers
+condition: []
+action:
+  - variables:
+      light_list: >
+        {% if lights.entity_id is string %}
+        {{   [lights.entity_id] }}
+        {% else %}
+        {{   lights.entity_id }}
+        {% endif %}
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: color-down
+        sequence:
+          - repeat:
+              for_each: "{{ light_list }}"
+              sequence:
+                - service: mqtt.publish
+                  data:
+                    qos: "2"
+                    retain: false
+                    topic: "{{'zigbee2mqtt/'~device_attr(repeat.item, 'name')~'/set'}}"
+                    payload: '{{''{"command":{"cluster":"lightingColorCtrl","command":"moveColorTemp","payload":{"minimum":0,"maximum":0,"movemode":3,"rate":''~(rate | string)~''}}}''}}'
+      - conditions:
+          - condition: trigger
+            id: color-up
+        sequence:
+          - repeat:
+              for_each: "{{ light_list }}"
+              sequence:
+                - service: mqtt.publish
+                  data:
+                    qos: "2"
+                    retain: false
+                    topic: "{{'zigbee2mqtt/'~device_attr(repeat.item, 'name')~'/set'}}"
+                    payload: '{{''{"command":{"cluster":"lightingColorCtrl","command":"moveColorTemp","payload":{"minimum":0,"maximum":0,"movemode":1,"rate":''~(rate | string)~''}}}''}}'
+      - conditions:
+          - condition: trigger
+            id: color-release
+        sequence:
+          - repeat:
+              for_each: "{{ light_list }}"
+              sequence:
+                - service: mqtt.publish
+                  data:
+                    qos: "2"
+                    retain: false
+                    topic: "{{'zigbee2mqtt/'~device_attr(repeat.item, 'name')~'/set'}}"
+                    payload: '{"command":{"cluster":"lightingColorCtrl","command":"moveColorTemp","payload":{"minimum":0,"maximum":0,"movemode":0,"rate":0}}}'
+      - conditions:
+          - condition: trigger
+            id: color-step-up
+        sequence:
+          - service: light.turn_on
+            data:
+              color_temp: '{{ state_attr(light_list[0],"color_temp")|int(200) + 50 }}'
+              #transition: 0.25
+            target: !input light_target
+      - conditions:
+          - condition: trigger
+            id: color-step-down
+        sequence:
+          - service: light.turn_on
+            data:
+              color_temp: '{{ [state_attr(light_list[0],"color_temp")|int(200) - 50, 1]|max }}'
+              #transition: 0.25
+            target: !input light_target

@@ -1,0 +1,143 @@
+blueprint:
+  name: Motion to Light with manual override
+  description: Controls lights with motion sensor and a remote control
+  domain: automation
+  input:
+    switch_device:
+      name: Remote control
+      selector:
+        device:
+    motion_sensor_device:
+      name: Motion sensor
+      selector:
+        entity:
+          domain: binary_sensor
+          device_class: motion
+    light_target:
+      name: Light to control
+      selector:
+        target:
+          entity:
+            domain: light
+    override_input:
+      name: Manual override input
+      selector:
+        target:
+          entity:
+            domain: input_boolean
+    wait_after_no_motion:
+      name: Time to wait after motion cleared
+      selector:
+        time:
+    active_from_time:
+      name: Active from time
+      default: "00:00:00"
+      selector:
+        time:
+    active_to_time:
+      name: Active to time
+      default: "00:00:00"
+      selector:
+        time:
+    no_motion_forced_off:
+      name: Timeout for no-motion forced light-off
+      default: "00:00:00"
+      selector:
+        time:
+
+mode: queued
+max: 20
+variables:
+  active_from: !input active_from_time
+  active_to: !input active_to_time
+  force_timeout: !input no_motion_forced_off
+  manual_override: !input override_input
+  thelight: !input light_target
+
+trigger:
+  - platform: state
+    entity_id: !input motion_sensor_device
+    from: "off"
+    to: "on"
+    id: motion-detected
+  - platform: state
+    entity_id: !input motion_sensor_device
+    from: "on"
+    to: "off"
+    for: !input wait_after_no_motion
+    id: motion-cleared
+  - platform: state
+    entity_id: !input motion_sensor_device
+    from: "on"
+    to: "off"
+    for: !input no_motion_forced_off
+    id: forced-motion-cleared
+  - platform: event
+    event_type: state_changed
+    event_data: !input light_target
+    id: lights-off
+  - device_id: !input switch_device
+    domain: zha
+    platform: device
+    type: remote_button_short_press
+    subtype: turn_on
+    id: enable-override
+condition: []
+action:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: forced-motion-cleared
+          - condition: template
+            value_template: "{{ force_timeout|string != '00:00:00' }}"
+        sequence:
+          - service: light.turn_off
+            data: {}
+            target: !input light_target
+      - conditions:
+          - condition: trigger
+            id: motion-detected
+          - condition: template
+            value_template: "{{ is_state(manual_override.entity_id, 'off') }}"
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ active_from|string == '00:00:00' and active_to|string == '00:00:00' }}"
+            then:
+              - service: light.turn_on
+                data: {}
+                target: !input light_target
+            else:
+              - if:
+                  - condition: time
+                    after: !input active_from_time
+                    before: !input active_to_time
+                then:
+                  - service: light.turn_on
+                    data: {}
+                    target: !input light_target
+      - conditions:
+          - condition: trigger
+            id: motion-cleared
+          - condition: template
+            value_template: "{{ is_state(manual_override.entity_id, 'off') }}"
+        sequence:
+          - service: light.turn_off
+            data: {}
+            target: !input light_target
+      - conditions:
+          - condition: trigger
+            id: lights-off
+          - condition: template
+            value_template: "{{ is_state(trigger.event.data.entity_id, 'off') }}"
+        sequence:
+          - service: input_boolean.turn_off
+            data: {}
+            target: !input override_input
+      - conditions:
+          - condition: trigger
+            id: enable-override
+        sequence:
+          - service: input_boolean.turn_on
+            data: {}
+            target: !input override_input

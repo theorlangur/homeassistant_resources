@@ -1,0 +1,141 @@
+blueprint:
+  name: IKEA e1743 On-Off Dimmer to control lights
+  description: Control lights with dimmer
+  domain: automation
+  input:
+    switch_device:
+      name: OnOff Dimmer Switch
+      selector:
+        device:
+    light_target:
+      name: Light
+      selector:
+        target:
+          entity:
+            domain: light
+    dim_transition:
+      name: Dimming Delay Time
+      description: Transition time for dimming
+      default: 400
+      selector:
+        number:
+          min: 50
+          max: 2000
+          unit_of_measurement: milliseconds
+    dim_iteration_wait:
+      name: Dimming Delay Time between iterations
+      description: Time between dimming lights
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 1000
+          unit_of_measurement: milliseconds
+    dim_step_up_pct:
+      name: Dimming Step Up Percentage
+      description: Step to dim in percents
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 100
+          unit_of_measurement: percentage
+    dim_step_down_pct:
+      name: Dimming Step Down Percentage
+      description: Step to dim in percents
+      default: -10
+      selector:
+        number:
+          min: -100
+          max: -1
+          unit_of_measurement: percentage
+variables:
+  light_transition: !input dim_transition
+  lights: !input light_target
+  light_entity: "{{ lights.entity_id }}"
+mode: restart
+max_exceeded: silent
+trigger:
+  - device_id: !input switch_device
+    domain: zha
+    platform: device
+    type: remote_button_long_press
+    subtype: dim_down
+    id: dim-down
+  - device_id: !input switch_device
+    domain: zha
+    platform: device
+    type: remote_button_long_press
+    subtype: dim_up
+    id: dim-up
+  - device_id: !input switch_device
+    domain: zha
+    platform: device
+    type: remote_button_long_release
+    subtype: dim_up
+    id: dim-up-release
+  - device_id: !input switch_device
+    domain: zha
+    platform: device
+    type: remote_button_long_release
+    subtype: dim_down
+    id: dim-down-release
+  - device_id: !input switch_device
+    domain: zha
+    platform: device
+    type: remote_button_short_press
+    subtype: turn_on
+    id: dim-on
+  - device_id: !input switch_device
+    domain: zha
+    platform: device
+    type: remote_button_short_press
+    subtype: turn_off
+    id: dim-off
+condition: []
+action:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: dim-down
+        sequence:
+          - repeat:
+              sequence:
+                - service: light.turn_on
+                  data:
+                    brightness_step_pct: !input dim_step_down_pct
+                    transition: "{{ light_transition / 1000 }}"
+                  target: !input light_target
+                - delay:
+                    milliseconds: !input dim_iteration_wait
+              while:
+                - condition: template
+                  value_template: "{{ is_state(light_entity, 'on') }}"
+      - conditions:
+          - condition: trigger
+            id: dim-up
+        sequence:
+          - repeat:
+              sequence:
+                - service: light.turn_on
+                  data:
+                    brightness_step_pct: !input dim_step_up_pct
+                    transition: "{{ light_transition / 1000 }}"
+                  target: !input light_target
+                - delay:
+                    milliseconds: !input dim_iteration_wait
+              while:
+                - condition: template
+                  value_template: "{{ state_attr(light_entity, 'brightness') | int < 255 }}"
+      - conditions:
+          - condition: trigger
+            id: dim-on
+        sequence:
+          - service: light.turn_on
+            target: !input light_target
+      - conditions:
+          - condition: trigger
+            id: dim-off
+        sequence:
+          - service: light.turn_off
+            target: !input light_target

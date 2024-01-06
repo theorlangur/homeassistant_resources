@@ -1,0 +1,98 @@
+send_message_to_phones:
+  alias: Send Message To Phones
+  sequence:
+  - parallel:
+    - alias: Case for User1
+      if:
+      - condition: or
+        conditions:
+        - condition: template
+          value_template: '{{ check_if_at_home != true }}'
+        - condition: state
+          entity_id: person.user1
+          state: home
+      - condition: template
+        value_template: '{{ (users_to_send | length == 0) or ("user1" in users_to_send)
+          }}'
+      then:
+      - service: notify.mobile_app_user1_phone
+        data:
+          message: '{{ message_var }}'
+          title: '{{ title_var }}'
+          data: '{{ data_var }}'
+    - alias: Case for User2
+      if:
+      - condition: or
+        conditions:
+        - condition: template
+          value_template: '{{ check_if_at_home != true }}'
+        - condition: state
+          entity_id: person.user2
+          state: home
+      - condition: template
+        value_template: '{{ (users_to_send | length == 0) or ("user2" in users_to_send)
+          }}'
+      then:
+      - service: notify.mobile_app_user2_phone
+        data:
+          message: '{{ message_var }}'
+          title: '{{ title_var }}'
+          data: '{{ data_var }}'
+      enabled: true
+    - alias: Case for User3
+      if:
+      - condition: or
+        conditions:
+        - condition: template
+          value_template: '{{ check_if_at_home != true }}'
+        - condition: state
+          entity_id: person.user3
+          state: home
+      - condition: template
+        value_template: '{{ (users_to_send | length == 0) or ("user3" in users_to_send)
+          }}'
+      then:
+      - service: notify.mobile_app_user3_phone
+        data:
+          message: '{{ message_var }}'
+          title: '{{ title_var }}'
+          data: '{{ data_var }}'
+      enabled: true
+  mode: single
+  icon: mdi:android
+  fields:
+    message_var:
+      selector:
+        text:
+      name: message
+      description: message to send
+      required: true
+    title_var:
+      selector:
+        text:
+      name: title
+      description: optional title for a notification message
+    data_var:
+      selector:
+        object:
+      name: data
+      default: {}
+      required: true
+    check_if_at_home:
+      selector:
+        boolean:
+      name: Check if at home
+      default: true
+    users_to_send:
+      selector:
+        select:
+          options:
+          - label: User1
+            value: user1
+          - label: User2
+            value: user2
+          - label: User3
+            value: user3
+          multiple: true
+      name: users_to_send
+      required: true

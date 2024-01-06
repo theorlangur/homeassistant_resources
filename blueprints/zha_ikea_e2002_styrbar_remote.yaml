@@ -1,0 +1,247 @@
+blueprint:
+  name: ZHA IKEA e2002 STYRBAR Remote to control lights + color temp
+  description: Control ZHA lights and color temp with IKEA STYRBAR remote
+  domain: automation
+  input:
+    switch_device:
+      name: ZHA 4-way Dimmer Switch (STYRBAR)
+      selector:
+        device:
+          filter:
+            integration: zha
+            model: "Remote Control N2"
+    light_target:
+      name: ZHA Lights
+      selector:
+        target:
+          entity:
+            domain: light
+            integration: zha
+    dim_rate:
+      name: Dimming rate
+      description: Speed of dimming (per second)
+      default: 60
+      selector:
+        number:
+          min: 1
+          max: 255
+    color_temp_rate:
+      name: Color temperature change rate
+      description: Speed of changing temperature color
+      default: 60
+      selector:
+        number:
+          min: 1
+          max: 255
+variables:
+  switch_dev: !input switch_device
+  dev_ieee: "{{ device_attr(switch_dev, 'identifiers') | selectattr(0,'eq','zha') | map(attribute=1) | first }}"
+  thelight: !input light_target
+  v_dim_rate: !input dim_rate
+  v_color_temp_rate: !input color_temp_rate
+mode: single
+trigger:
+  - device_id: !input switch_device
+    domain: zha
+    platform: device
+    type: remote_button_short_press
+    subtype: turn_on
+    id: dim-on
+  - device_id: !input switch_device
+    domain: zha
+    platform: device
+    type: remote_button_short_press
+    subtype: turn_off
+    id: dim-off
+  - device_id: !input switch_device
+    domain: zha
+    platform: device
+    type: remote_button_long_press
+    subtype: dim_up
+    id: dim-up
+  - device_id: !input switch_device
+    domain: zha
+    platform: device
+    type: remote_button_long_release
+    subtype: dim_up
+    id: dim-up-release
+  - device_id: !input switch_device
+    domain: zha
+    platform: device
+    type: remote_button_long_press
+    subtype: dim_down
+    id: dim-down
+  - device_id: !input switch_device
+    domain: zha
+    platform: device
+    type: remote_button_long_release
+    subtype: dim_down
+    id: dim-down-release
+  - device_id: !input switch_device
+    domain: zha
+    platform: device
+    type: remote_button_short_press
+    subtype: right
+    id: right-click
+  - device_id: !input switch_device
+    domain: zha
+    platform: device
+    type: remote_button_short_press
+    subtype: left
+    id: left-click
+  - device_id: !input switch_device
+    domain: zha
+    platform: device
+    type: remote_button_long_press
+    subtype: right
+    id: right-long
+  - device_id: !input switch_device
+    domain: zha
+    platform: device
+    type: remote_button_long_press
+    subtype: left
+    id: left-long
+  - platform: event
+    event_type: zha_event
+    event_data:
+      command: release
+    id: right-left-long-release
+condition: []
+action:
+  - variables:
+      light_list: >
+        {% if thelight.entity_id is string %}
+        {{   [thelight.entity_id] }}
+        {% else %}
+        {{   thelight.entity_id }}
+        {% endif %}
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: dim-on
+        sequence:
+          - service: light.turn_on
+            data: {}
+            target: !input light_target
+      - conditions:
+          - condition: trigger
+            id: dim-off
+        sequence:
+          - service: light.turn_off
+            data: {}
+            target: !input light_target
+      - conditions:
+          - condition: trigger
+            id: dim-up
+        sequence:
+          - repeat:
+              for_each: "{{ light_list }}"
+              sequence:
+                - service: zha_toolkit.zcl_cmd
+                  data:
+                    ieee: "{{ repeat.item }}"
+                    cluster: 8 #LevelControl
+                    cmd: 5 #move_with_on_off
+                    args:
+                      - 0 #up
+                      - "{{v_dim_rate}}"
+      - conditions:
+          - condition: trigger
+            id: dim-down
+        sequence:
+          - repeat:
+              for_each: "{{ light_list }}"
+              sequence:
+                - service: zha_toolkit.zcl_cmd
+                  data:
+                    ieee: "{{ repeat.item }}"
+                    cluster: 8 #LevelControl
+                    cmd: 5 #move_with_on_off
+                    args:
+                      - 1 #down
+                      - "{{v_dim_rate}}"
+      - conditions:
+          - condition: trigger
+            id:
+              - dim-up-release
+              - dim-down-release
+        sequence:
+          - repeat:
+              for_each: "{{ light_list }}"
+              sequence:
+                - service: zha_toolkit.zcl_cmd
+                  data:
+                    ieee: "{{ repeat.item }}"
+                    cluster: 8 #LevelControl
+                    cmd: 3 #stop
+      - conditions:
+          - condition: trigger
+            id: right-click
+        sequence:
+          - service: light.turn_on
+            data:
+              color_temp: '{{ state_attr(light_list[0],"color_temp")|int(200) + 50 }}'
+              #transition: 0.25
+            target: !input light_target
+      - conditions:
+          - condition: trigger
+            id: left-click
+        sequence:
+          - service: light.turn_on
+            data:
+              color_temp: '{{ [state_attr(light_list[0],"color_temp")|int(200) - 50, 1]|max }}'
+              #transition: 0.25
+            target: !input light_target
+      - conditions:
+          - condition: trigger
+            id: right-long
+        sequence:
+          - repeat:
+              for_each: "{{ light_list }}"
+              sequence:
+                - service: zha_toolkit.zcl_cmd
+                  data:
+                    ieee: "{{ repeat.item }}"
+                    cluster: 0x0300 #Color
+                    cmd: 0x004b #move_color_temp
+                    args:
+                      - 1 #up
+                      - "{{v_color_temp_rate}}"
+                      - 0 #min color temp - default
+                      - 0 #max color temp - default
+      - conditions:
+          - condition: trigger
+            id: left-long
+        sequence:
+          - repeat:
+              for_each: "{{ light_list }}"
+              sequence:
+                - service: zha_toolkit.zcl_cmd
+                  data:
+                    ieee: "{{ repeat.item }}"
+                    cluster: 0x0300 #Color
+                    cmd: 0x004b #move_color_temp
+                    args:
+                      - 3 #down
+                      - "{{v_color_temp_rate}}"
+                      - 0 #min color temp - default
+                      - 0 #max color temp - default
+      - conditions:
+          - condition: trigger
+            id: right-left-long-release
+          - condition: template
+            value_template: "{{ trigger.event.data.device_ieee == dev_ieee }}"
+        sequence:
+          - repeat:
+              for_each: "{{ light_list }}"
+              sequence:
+                - service: zha_toolkit.zcl_cmd
+                  data:
+                    ieee: "{{ repeat.item }}"
+                    cluster: 0x0300 #Color
+                    cmd: 0x004b #move_color_temp
+                    args:
+                      - 0 #stop
+                      - 0 #rate doesn't matter
+                      - 0 #min color temp - default
+                      - 0 #max color temp - default

@@ -1,0 +1,25 @@
+z2m_set_current_time:
+  alias: Z2M Set Current Time
+  sequence:
+  - variables:
+      time_to_set: '{% set start_date = as_timestamp(strptime(''2000-01-01'', ''%Y-%m-%d''))
+        %} {% set current_date = as_timestamp(now()) %} {% set seconds_since_2000
+        = (current_date - start_date) | int %} {{ seconds_since_2000 }}'
+      mqtt_topic: '{{ device_attr(selected_device, ''name'') }}'
+  - service: mqtt.publish
+    data:
+      qos: '0'
+      retain: false
+      topic: zigbee2mqtt/{{ mqtt_topic }}/set/write
+      payload: '{"cluster":"genTime","payload":{"time":{{ time_to_set }} } }'
+  mode: single
+  icon: mdi:clock-time-four
+  fields:
+    selected_device:
+      selector:
+        device:
+          filter:
+            integration: mqtt
+      name: Device
+      description: Zigbee2MQTT device
+      required: true

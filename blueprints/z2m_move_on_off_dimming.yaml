@@ -1,0 +1,92 @@
+blueprint:
+  name: Z2M ligts to control with LevelControl MoveOnOff
+  description: Control Z2M lights with any controller capable of mqtt brightness moves
+  domain: automation
+  input:
+    device_triggers:
+      name: Triggers for light control
+      description: "IDs:dim-up,dim-down,dim-long-release,dim-on,dim-off"
+      selector:
+        trigger:
+    light_target:
+      name: Lights
+      selector:
+        target:
+          entity:
+            integration: mqtt
+            domain: light
+    dim_rate:
+      name: Dimming Rate
+      description: Transition time for dimming
+      default: 60
+      selector:
+        number:
+          min: 1
+          max: 255
+variables:
+  light_rate: !input dim_rate
+  lights: !input light_target
+mode: single
+max_exceeded: silent
+trigger: !input device_triggers
+condition: []
+action:
+  - variables:
+      light_list: >
+        {% if lights.entity_id is string %}
+        {{   [lights.entity_id] }}
+        {% else %}
+        {{   lights.entity_id }}
+        {% endif %}
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: dim-down
+        sequence:
+          - repeat:
+              for_each: "{{ light_list }}"
+              sequence:
+                - service: mqtt.publish
+                  data:
+                    qos: "2"
+                    retain: false
+                    topic: "{{'zigbee2mqtt/'~device_attr(repeat.item, 'name')~'/set'}}"
+                    payload: '{{''{"command":{"cluster":"genLevelCtrl","command":"moveWithOnOff","payload":{"movemode":1,"rate":''~(light_rate | string)~''}}}''}}'
+      - conditions:
+          - condition: trigger
+            id: dim-up
+        sequence:
+          - repeat:
+              for_each: "{{ light_list }}"
+              sequence:
+                - service: mqtt.publish
+                  data:
+                    qos: "2"
+                    retain: false
+                    topic: "{{'zigbee2mqtt/'~device_attr(repeat.item, 'name')~'/set'}}"
+                    payload: '{{''{"command":{"cluster":"genLevelCtrl","command":"moveWithOnOff","payload":{"movemode":0,"rate":''~(light_rate | string)~''}}}''}}'
+      - conditions:
+          - condition: trigger
+            id: dim-long-release
+        sequence:
+          - repeat:
+              for_each: "{{ light_list }}"
+              sequence:
+                - service: mqtt.publish
+                  data:
+                    qos: "2"
+                    retain: false
+                    topic: "{{'zigbee2mqtt/'~device_attr(repeat.item, 'name')~'/set'}}"
+                    payload: '{{''{"command":{"cluster":"genLevelCtrl","command":"stop","payload":{}}}''}}'
+      - conditions:
+          - condition: trigger
+            id: dim-on
+        sequence:
+          - service: light.turn_on
+            target: !input light_target
+      - conditions:
+          - condition: trigger
+            id: dim-off
+        sequence:
+          - service: light.turn_off
+            target: !input light_target
