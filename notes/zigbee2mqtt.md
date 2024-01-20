@@ -48,3 +48,25 @@ List of supported clusters with attributes, commands and type information can be
 ***Note:***
 
 meaning and possible values of payload fields is not described there. For that ZCL (Zigbee Cluster Library) description [document](https://zigbeealliance.org/wp-content/uploads/2021/10/07-5123-08-Zigbee-Cluster-Library.pdf) should be checked.
+
+## Moving Hue for Led Controller (TS0503B, _TZ3000_i8l0nqdu)
+
+MQTT topic:
+> zigbee2mqtt/&lt;FriendlyDeviceName&gt;/set
+
+Payload (move Up): 
+> {"command":{"cluster":"lightingColorCtrl","command":"moveHue","payload":{"movemode":1,"rate":10}}}
+
+Payload (move Down): 
+> {"command":{"cluster":"lightingColorCtrl","command":"moveHue","payload":{"movemode":3,"rate":10}}}
+
+Payload (move Stop): 
+> {"command":{"cluster":"lightingColorCtrl","command":"moveHue","payload":{"movemode":0,"rate":10}}}
+
+***Note 1:***
+
+when stopping for some reason 'rate' had to be non-zero (at least for this led controller). Movemove:0, rate:0 - no reaction
+
+***Note 2:***
+
+rate according to ZCL (5.2.2.3.5.3 ) description is a 'change in the device’s hue of one unit' whatever that means.
